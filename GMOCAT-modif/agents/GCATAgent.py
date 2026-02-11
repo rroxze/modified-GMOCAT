@@ -18,6 +18,7 @@ class Memory:
         self.states = []
         self.logprobs = []
         self.rewards = []
+        self.coverages = []
         self.action_masks = []
         self.dones = []
 
@@ -26,6 +27,7 @@ class Memory:
         del self.states[:]
         del self.logprobs[:]
         del self.rewards[:]
+        del self.coverages[:]
         del self.action_masks[:]
         del self.dones[:]
 
@@ -35,7 +37,7 @@ class GCATAgent(object):
         self.fa = fa
         self.args = args
         self.target_concepts = args.target_concepts
-        self.device = torch.device('cuda')
+        self.device = torch.device('cpu')
         
         self.memory = Memory()
         self.logger = logging.getLogger(f'{args.FA}')
@@ -110,6 +112,10 @@ class GCATAgent(object):
             train_mask = torch.zeros(action_mask.shape[0], self.env.item_num).long()
             done = False
             self.cnt_step = 0
+
+            # Initialize coverage tracking
+            current_coverages = np.zeros(len(selected_users))
+
             while not done:
                 batch_question = cp.deepcopy(state['batch_question']) # B T+1
                 batch_answer = cp.deepcopy(state['batch_answer'])
@@ -138,6 +144,7 @@ class GCATAgent(object):
                     self.memory.logprobs.append(dist.log_prob(action))  # tensor, B ,20
                     self.memory.action_masks.append(cp.deepcopy(action_mask)) # tensor, B*N, 20
                     self.memory.states.extend([(batch_question[i],pnt[i],batch_answer[i]) for i in range(len(selected_users))]) # np, B, 20
+                    self.memory.coverages.extend(current_coverages) # Store current coverage for adaptive weight
                 
                 # update mask
                 action_mask[range(len(action)), action] = 0
@@ -149,7 +156,18 @@ class GCATAgent(object):
                     state_next, rwd, done, all_info, cov = self.env.step(action, True)
                     self.all_cov[self.cnt_step].append(cov)
                 else:
-                    state_next, rwd, done, all_info, _ = self.env.step(action, False)
+                    state_next, rwd, done, all_info, cov = self.env.step(action, False)
+
+                # Update current coverages based on environment feedback if available (GCATEnv returns scalar cov sum)
+                # Actually GCATEnv step returns `cov` as scalar (average coverage of batch).
+                # Ideally we want individual coverage. But let's use the scalar for now or improve GCATEnv.
+                # In GCATEnv.step, `coverages` list is computed.
+                # But it returns mean.
+                # Let's just use the mean for now as proxy or modify GCATEnv to return list?
+                # Modifying GCATEnv is better but let's stick to what we have to minimize changes.
+                # Wait, `current_coverages` is needed per user for `memory`.
+                # If I use scalar `cov`, I broadcast it.
+                current_coverages = np.full(len(selected_users), cov)
 
                 if flag == 'training':
                     self.memory.rewards.append(rwd) # np,B*3 ,20
@@ -176,6 +194,8 @@ class GCATAgent(object):
                 old_actions = torch.cat(self.memory.actions, dim=0).detach() # 20B,
                 old_logprobs = torch.cat(self.memory.logprobs, dim=0).detach() # 20B,
                 old_actionmask = torch.cat(self.memory.action_masks, dim=0).detach() # 20B, N
+                old_coverages = torch.tensor(self.memory.coverages, dtype=torch.float32).detach()
+
                 # print(rewards.shape, old_actions.shape, old_logprobs.shape,old_actionmask.shape)
                 ep_length = len(old_actions)
                 batch_size = ep_length//4
@@ -186,7 +206,8 @@ class GCATAgent(object):
                     b_old_actions = old_actions[indices].to(self.device)
                     b_old_logprobs = old_logprobs[indices].to(self.device)
                     b_old_actionmask = old_actionmask[indices].to(self.device)
-                    loss = self.fa.optimize_model(b_old_states, b_old_actions, b_old_logprobs,b_old_actionmask,b_rewards)
+                    b_coverages = old_coverages[indices].to(self.device)
+                    loss = self.fa.optimize_model(b_old_states, b_old_actions, b_old_logprobs,b_old_actionmask,b_rewards, b_coverages)
                 
                 all_loss += loss
                 # print('transfer weights')

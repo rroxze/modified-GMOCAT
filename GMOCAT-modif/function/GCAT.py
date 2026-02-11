@@ -13,7 +13,7 @@ from util import tensor_to_numpy
 
 class ActorCritic(nn.Module):
     def __init__(self,  args, local_map):
-        self.device = torch.device('cuda')
+        self.device = torch.device('cpu')
         self.args = args
         self.know_num = args.know_num
         self.item_num = args.item_num
@@ -152,7 +152,7 @@ class GCAT:
         self.betas = (0.9,0.999)
         self.morl_weights = args.morl_weights
 
-        self.device = torch.device('cuda')
+        self.device = torch.device('cpu')
         self.eps_clip = 0.2
 
         self.policy = ActorCritic(args, local_map).to(self.device)
@@ -162,7 +162,7 @@ class GCAT:
         self.MseLoss = nn.MSELoss()
 
     def update(self,p_rec, p_target, a_rec, kn_rec, kn_num, 
-                    b_old_actions, b_old_logprobs, b_old_actionmask, b_rewards):
+                    b_old_actions, b_old_logprobs, b_old_actionmask, b_rewards, b_coverages=None):
 
         logprobs, state_values, dist_entropy = self.policy.evaluate(
             p_rec, p_target, a_rec, kn_rec, kn_num, b_old_actions, b_old_actionmask)
@@ -172,9 +172,24 @@ class GCAT:
 
         # Finding Surrogate Loss:
         advantages = b_rewards - state_values.detach() # B 3
-        advantages =  advantages[:, 0] * self.morl_weights[0] + \
-                    advantages[:, 1] * self.morl_weights[1] + \
-                    advantages[:, 2] * self.morl_weights[2]# B
+
+        # Adaptive Diversity Weight
+        div_weight = self.morl_weights[1]
+        if b_coverages is not None:
+            # Increase weight if coverage is low.
+            # Example rule: weight = base_weight * (1 + 2*(1-coverage))
+            # b_coverages: (B,)
+            div_weight_scale = (1.0 + 2.0 * (1.0 - b_coverages))
+            # This makes div_weight a vector (B,)
+
+            advantages =  advantages[:, 0] * self.morl_weights[0] + \
+                        advantages[:, 1] * (self.morl_weights[1] * div_weight_scale) + \
+                        advantages[:, 2] * self.morl_weights[2]
+        else:
+            advantages =  advantages[:, 0] * self.morl_weights[0] + \
+                        advantages[:, 1] * self.morl_weights[1] + \
+                        advantages[:, 2] * self.morl_weights[2]# B
+
         advantages = torch.squeeze(advantages)
         surr1 = ratios * advantages
         surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
@@ -182,9 +197,16 @@ class GCAT:
         # actor_loss = -torch.min(surr1, surr2).mean()
         
         critic_loss = torch.square(state_values-b_rewards) * 0.5 # B 3
-        critic_loss =  critic_loss[:, 0] * self.morl_weights[0] + \
-                     critic_loss[:, 1] * self.morl_weights[1] + \
-                     critic_loss[:, 2] * self.morl_weights[2]
+
+        if b_coverages is not None:
+             critic_loss =  critic_loss[:, 0] * self.morl_weights[0] + \
+                         critic_loss[:, 1] * (self.morl_weights[1] * div_weight_scale) + \
+                         critic_loss[:, 2] * self.morl_weights[2]
+        else:
+            critic_loss =  critic_loss[:, 0] * self.morl_weights[0] + \
+                         critic_loss[:, 1] * self.morl_weights[1] + \
+                         critic_loss[:, 2] * self.morl_weights[2]
+
         critic_loss = critic_loss.mean()
         loss = actor_loss + critic_loss
         # print(actor_loss, critic_loss)
@@ -197,7 +219,7 @@ class GCAT:
         # self.policy_old.load_state_dict(self.policy.state_dict())
         return tensor_to_numpy(loss)
 
-    def optimize_model(self, data, b_old_actions, b_old_logprobs,b_old_actionmask, b_rewards):
+    def optimize_model(self, data, b_old_actions, b_old_logprobs, b_old_actionmask, b_rewards, b_coverages=None):
         self.policy.train()
         p_rec, p_target, a_rec, kn_rec, kn_num = \
             data['p_rec'], data['p_t'], data['a_rec'], data['kn_rec'], data['kn_num']
@@ -205,7 +227,7 @@ class GCAT:
                             torch.LongTensor(p_rec).to(self.device), torch.LongTensor(p_target).to(self.device), \
                             torch.LongTensor(a_rec).to(self.device), kn_rec.to(self.device), kn_num.to(self.device)
         loss = self.update(p_rec, p_target, a_rec, kn_rec, kn_num, 
-                    b_old_actions, b_old_logprobs,b_old_actionmask, b_rewards)
+                    b_old_actions, b_old_logprobs,b_old_actionmask, b_rewards, b_coverages)
         return loss
 
     # def transfer_weights(self):
@@ -221,7 +243,7 @@ class GCAT:
     @classmethod
     def create_model(cls, config, local_map):
         model = cls(config, local_map)
-        # device = torch.device('cuda')
+        # device = torch.device('cpu')
         return model
         
 # GAT layer
@@ -254,7 +276,7 @@ class GraphLayer(nn.Module):
 
 class Fusion(nn.Module):
     def __init__(self, args, local_map):
-        self.device = torch.device('cuda')
+        self.device = torch.device('cpu')
         self.know_num = args.know_num
         self.item_num = args.item_num
         self.emb_dim = args.emb_dim
