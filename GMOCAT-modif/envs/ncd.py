@@ -71,7 +71,7 @@ class NCDModel:
     def __init__(self, args, num_students, num_questions, num_knowledges):
         super().__init__()
         self.args = args
-        self.device = torch.device('cuda')
+        self.device = torch.device('cpu')
         self.num_knowledges = num_knowledges
         self.model = NCD(num_students, num_questions, num_knowledges).to(self.device)
         self.loss_function = nn.BCELoss()
@@ -116,9 +116,71 @@ class NCDModel:
         
         return all_loss, pred, real
 
-    def get_knowledge_status(self, stu_id):
-        stat_emb = torch.sigmoid(self.model.student_emb(stu_id))
+    def get_knowledge_status(self, stu_ids, concept_map=None):
+        # If concept_map is provided, we can estimate uncertainty per concept
+        if concept_map is not None:
+             return self.estimate_concept_uncertainty(stu_ids, concept_map)
+
+        stat_emb = torch.sigmoid(self.model.student_emb(stu_ids))
         return stat_emb.data
+
+    def estimate_concept_uncertainty(self, stu_ids, concept_map, n_samples=5):
+        device = self.device
+        self.model.train() # Enable dropout
+
+        num_concepts = self.num_knowledges
+        batch_size = len(stu_ids)
+
+        uncertainties = torch.zeros(batch_size, num_concepts).to(device)
+        means = torch.zeros(batch_size, num_concepts).to(device)
+
+        concept_to_qid = {}
+        for qid, concepts in concept_map.items():
+            if qid == 0: continue # Pad
+            for c in concepts:
+                if c not in concept_to_qid:
+                    concept_to_qid[c] = qid
+
+        predictions_sum = torch.zeros(batch_size, num_concepts).to(device)
+        predictions_sq_sum = torch.zeros(batch_size, num_concepts).to(device)
+
+        q_indices = []
+        c_embs_list = []
+
+        valid_concepts = []
+        for c in range(num_concepts):
+            if c in concept_to_qid:
+                q = concept_to_qid[c]
+                q_indices.append(q)
+
+                c_emb = [0.] * num_concepts
+                c_emb[c] = 1.0
+                c_embs_list.append(c_emb)
+                valid_concepts.append(c)
+            else:
+                q_indices.append(1) # Dummy
+                c_embs_list.append([0.] * num_concepts)
+
+        q_tensor = torch.LongTensor(q_indices).to(device) # (num_concepts,)
+        c_tensor = torch.Tensor(c_embs_list).to(device)   # (num_concepts, num_concepts)
+
+        s_expanded = stu_ids.unsqueeze(1).repeat(1, num_concepts).view(-1)
+        q_expanded = q_tensor.unsqueeze(0).repeat(batch_size, 1).view(-1)
+        c_expanded = c_tensor.unsqueeze(0).repeat(batch_size, 1, 1).view(-1, num_concepts)
+
+        with torch.no_grad():
+            for _ in range(n_samples):
+                out = self.model(s_expanded, q_expanded, c_expanded).view(batch_size, num_concepts)
+                predictions_sum += out
+                predictions_sq_sum += out ** 2
+
+        means = predictions_sum / n_samples
+        variance = (predictions_sq_sum / n_samples) - (means ** 2)
+
+        self.model.eval() # Restore eval mode
+
+        stat_emb = torch.sigmoid(self.model.student_emb(stu_ids)).data
+        return stat_emb, variance
         
     def train(self, train_data, lr, batch_size, epochs, path):
         device = self.device
@@ -149,8 +211,6 @@ class NCDModel:
                 best_loss = loss
                 logger.info('Store model')
                 self.adaptest_save(path)
-                # if cnt % log_step == 0:
-                #     logging.info('Epoch [{}] Batch [{}]: loss={:.5f}'.format(ep, cnt, loss / cnt))
     
     def _loss_function(self, pred, real):
         pred_0 = torch.ones(pred.size()).to(self.device) - pred
@@ -164,7 +224,7 @@ class NCDModel:
         torch.save(model_dict, path)
     
     def adaptest_load(self, path):
-        self.model.load_state_dict(torch.load(path), strict=False)
+        self.model.load_state_dict(torch.load(path, map_location=torch.device('cpu')), strict=False)
         self.model.to(self.device)
     
     def update(self, tested_dataset, lr, epochs, batch_size):
@@ -187,8 +247,6 @@ class NCDModel:
                 optimizer.step()
                 self.model.apply_clipper()
                 loss += bz_loss.data.float()
-                # if cnt % log_steps == 0:
-                    # print('Epoch [{}] Batch [{}]: loss={:.3f}'.format(ep, cnt, loss / cnt))
 
     def get_pred(self, user_ids, avail_questions, concept_map):
         device = self.device
