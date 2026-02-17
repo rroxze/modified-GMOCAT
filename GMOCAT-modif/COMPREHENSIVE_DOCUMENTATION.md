@@ -47,7 +47,7 @@ We integrated **Monte Carlo (MC) Dropout** into the Neural Cognitive Diagnosis (
 ### 2.3. Adaptive Diversity Weight
 **Files:** `agents/GCATAgent.py`, `function/GCAT.py`
 
-**Problem:** A fixed weight for the diversity objective in the Multi-Objective Reinforcement Learning (MORL) loss function is inefficient. High diversity is crucial early on to explore the knowledge state, but accuracy becomes more important later.
+**Problem:** A fixed weight for the diversity objective in the loss function is inefficient. High diversity is crucial early on to explore the knowledge state, but accuracy becomes more important later.
 
 **Solution:**
 We implemented a dynamic weighting scheme for the diversity component of the loss function.
@@ -76,39 +76,52 @@ Due to version conflicts between `dgl` and `torchdata` (specifically regarding `
 *   **Standard Install:** `pip install torch dgl==2.4.0+cu121 -f https://data.dgl.ai/wheels/torch-2.4/cu121/repo.html` (adjust for CPU/CUDA as needed).
 *   **Patching:** If you encounter `ModuleNotFoundError: No module named 'torchdata.datapipes'`, ensure you are using the compatible versions provided or apply the patches to `dgl/distributed/*.py` as done in this environment.
 
-### 3.3. Configuration
-The code is currently hardcoded to use **CPU** to ensure compatibility with environments lacking NVIDIA drivers.
-*   To enable GPU, find `torch.device('cpu')` in `GCAT.py`, `GCATAgent.py`, `ncd.py`, and `Env.py` and replace with `torch.device('cuda')`.
-
 ---
 
-## 4. Usage Guide
+## 4. Hardware Configuration (CPU/GPU)
 
-### 4.1. Running the Experiment
-To train the enhanced GMOCAT agent on the `dbekt22` dataset:
+The codebase has been refactored to be device-agnostic, supporting both CPU and GPU execution via command-line arguments.
+
+### 4.1. Selecting the Device
+You can specify the target device using the `-device` flag in `launch_gcat.py` (or via `train_gcat.sh`).
+
+*   **Running on CPU (Default/Safe Mode):**
+    Use `-device cpu`. This is recommended for environments without NVIDIA drivers or for debugging.
+    ```bash
+    python launch_gcat.py ... -device cpu
+    ```
+
+*   **Running on GPU:**
+    Use `-device cuda`. The script will automatically check for CUDA availability. If CUDA is not available, it will gracefully fallback to CPU and print a warning.
+    ```bash
+    python launch_gcat.py ... -device cuda -gpu_no 0
+    ```
+
+### 4.2. Step-by-Step Execution Guide
+
+#### Phase 1: Data Preparation
+Ensure raw data is processed (if starting from scratch) or use the pre-processed `dbekt22` data provided in `data/` and `graph_data/`.
+
+#### Phase 2: Configuration
+Edit `train_gcat.sh` to match your resource constraints.
+*   **High-End GPU:** Increase `train_bs` (e.g., 128 or 256) and `training_epoch` (e.g., 50).
+*   **CPU / Low-Resource:** Keep `train_bs` small (e.g., 32 or 64) to prevent timeouts or memory issues.
+
+#### Phase 3: Main Training
+Execute the training script:
 
 ```bash
 cd GMOCAT-modif
 bash train_gcat.sh
 ```
 
-**Script Parameters (`train_gcat.sh`):**
-*   `-data_name dbekt22`: Target dataset.
-*   `-CDM NCD`: Using Neural Cognitive Diagnosis model.
-*   `-T 20`: Test length (20 steps).
-*   `-training_epoch 1`: Set to 1 for quick verification (increase for full training).
-*   `-train_bs 4`: Reduced batch size for stability in constrained environments.
-
-### 4.2. Analyzing Results
-To visualize the concept coverage progression:
+#### Phase 4: Analysis & Visualization
+After training, generate the coverage analysis:
 
 ```bash
-# From the root directory
+cd ..
 python analyze_results.py --log_dir GMOCAT-modif/baseline_log/dbekt22
 ```
-
-**Output:**
-*   A plot file: `analysis_output/coverage_curve.png`.
 
 ---
 
@@ -132,6 +145,8 @@ python analyze_results.py --log_dir GMOCAT-modif/baseline_log/dbekt22
     *   `envs/ncd.py`: **[Modified]** Added MC Dropout / Uncertainty estimation.
     *   `agents/GCATAgent.py`: **[Modified]** Added coverage tracking for adaptive weights.
     *   `function/GCAT.py`: **[Modified]** Implemented adaptive loss weighting.
+    *   `launch_gcat.py`: **[Modified]** Added `--device` argument handling.
+    *   `util.py`: **[Modified]** Made seed setting device-aware.
     *   `train_gcat.sh`: **[Modified]** Updated configuration for DBEKT22 experiment.
     *   `analyze_results.py`: **[New]** Analysis script.
     *   `README_ENHANCED.md`: **[New]** Quick start guide.
