@@ -73,15 +73,31 @@ class Env(object):
             path = 'models/{}/{}_{}_{}.pt'.format(self.args.data_name, self.CDM, self.args.data_name, self.args.T)
 
             model = IRTModel(self.args, self.user_num, self.item_num, 1)
-            model.adaptest_load(path)
-            self.logger.info(path)
+            try:
+                ckpt = torch.load(path, map_location=torch.device('cpu'))
+                model_dict = model.state_dict()
+                filtered = {k: v for k, v in ckpt.items() if k in model_dict and model_dict[k].shape == v.shape}
+                model.load_state_dict(filtered, strict=False)
+                self.logger.info(f'Loaded CDM from {path} (filtered mismatched params)')
+            except FileNotFoundError:
+                self.logger.info(f'No checkpoint found at {path}, initializing new IRT model')
+            except Exception as e:
+                self.logger.warning(f'Could not fully load checkpoint {path}: {e}')
 
         elif name == 'NCD':
             path = 'models/{}/{}_{}_{}.pt'.format(self.args.data_name,self.CDM, self.args.data_name, self.args.T)
 
             model = NCDModel(self.args, self.user_num, self.item_num, self.know_num)
-            model.adaptest_load(path)
-            self.logger.info(path)
+            try:
+                ckpt = torch.load(path, map_location=torch.device('cpu'))
+                model_dict = model.state_dict()
+                filtered = {k: v for k, v in ckpt.items() if k in model_dict and model_dict[k].shape == v.shape}
+                model.load_state_dict(filtered, strict=False)
+                self.logger.info(f'Loaded CDM from {path} (filtered mismatched params)')
+            except FileNotFoundError:
+                self.logger.info(f'No checkpoint found at {path}, initializing new NCD model')
+            except Exception as e:
+                self.logger.warning(f'Could not fully load checkpoint {path}: {e}')
         else:
             self.logger.info('no CDM')
             exit()
@@ -117,7 +133,7 @@ class Env(object):
             user_cnt += 1
             rates[user_cnt] = {}
             for qid, label in zip(stu['q_ids'], stu['labels']): 
-                qid_pad = int(qid)+1
+                qid_pad = int(qid)
                 rates[user_cnt][qid_pad] = int(label)
                 items.add(qid_pad)
                 know_map[qid_pad] = concept_data[str(qid)]

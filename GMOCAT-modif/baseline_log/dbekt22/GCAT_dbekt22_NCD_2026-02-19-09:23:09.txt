@@ -1,0 +1,2 @@
+2026-02-19 09:23:09,772 - Training Model: GCATAgent_GCAT_20
+2026-02-19 09:23:09,938 - train/val/test size: 1012, 126,126
