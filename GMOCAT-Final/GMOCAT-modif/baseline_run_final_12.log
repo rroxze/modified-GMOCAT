@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "/app/GMOCAT-modif/./launch_gcat.py", line 6, in <module>
+    import dgl
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/__init__.py", line 16, in <module>
+    from . import (
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/dataloading/__init__.py", line 13, in <module>
+    from .dataloader import *
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/dataloading/dataloader.py", line 27, in <module>
+    from ..distributed import DistGraph
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/distributed/__init__.py", line 5, in <module>
+    from .dist_graph import DistGraph, DistGraphServer, edge_split, node_split
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/distributed/dist_graph.py", line 11, in <module>
+    from .. import backend as F, graphbolt as gb, heterograph_index
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/graphbolt/__init__.py", line 55, in <module>
+    load_graphbolt()
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/graphbolt/__init__.py", line 45, in load_graphbolt
+    raise FileNotFoundError(
+FileNotFoundError: Cannot find DGL C++ graphbolt library at /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/dgl/graphbolt/libgraphbolt_pytorch_2.4.1.so

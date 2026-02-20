@@ -1,0 +1,24 @@
+/usr/local/python/3.12.1/lib/python3.12/site-packages/dgl/dataloading/__init__.py:18: UserWarning: Optional DGL dataloading components failed to import and will be skipped: No module named 'torchdata.datapipes'
+  warnings.warn(f"Optional DGL dataloading components failed to import and will be skipped: {_err}")
+/usr/local/python/3.12.1/lib/python3.12/site-packages/dgl/__init__.py:71: UserWarning: Optional module dgl.distributed failed to import and will be skipped: No module named 'torchdata.datapipes'
+  warnings.warn(f"Optional module dgl.distributed failed to import and will be skipped: {_err}")
+/usr/local/python/3.12.1/lib/python3.12/site-packages/torch/utils/data/dataloader.py:558: UserWarning: This DataLoader will create 3 worker processes in total. Our suggested max number of worker in current system is 2, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+Namespace(seed=145, environment='GCATEnv', data_path='./data/', data_name='dbekt22', agent='GCATAgent', FA='GCAT', CDM='NCD', T=20, ST=[20], gpu_no='0', device='cpu', learning_rate=0.001, training_epoch=1, cdm_lr=0.02, cdm_epoch=1, cdm_bs=32, train_bs=4, test_bs=4, batch=128, gamma=0.5, latent_factor=256, n_block=1, graph_block=1, n_head=1, dropout_rate=0.1, policy_epoch=1, morl_weights=[1, 1, 1], emb_dim=128, use_graph=True, use_attention=True, store_action=False, student_ids=[0], target_concepts=[0], model='GCATAgent_GCAT_20', user_num=1264, item_num=213, know_num=93)
+Traceback (most recent call last):
+  File "/workspaces/modified-GMOCAT/GMOCAT-Final/GMOCAT-modif/./launch_gcat.py", line 158, in <module>
+    main(sys.argv)
+  File "/workspaces/modified-GMOCAT/GMOCAT-Final/GMOCAT-modif/./launch_gcat.py", line 152, in main
+    agents[args.agent](env, fa, args).train()
+  File "/workspaces/modified-GMOCAT/GMOCAT-Final/GMOCAT-modif/agents/GCATAgent.py", line 56, in train
+    self.collecting_data_update_model("training", epoch)
+  File "/workspaces/modified-GMOCAT/GMOCAT-Final/GMOCAT-modif/agents/GCATAgent.py", line 159, in collecting_data_update_model
+    state_next, rwd, done, all_info, cov = self.env.step(action, False)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspaces/modified-GMOCAT/GMOCAT-Final/GMOCAT-modif/envs/GCATEnv.py", line 96, in step
+    reward, pred, label, rate = self.reward(action)
+                                ^^^^^^^^^^^^^^^^^^^
+  File "/workspaces/modified-GMOCAT/GMOCAT-Final/GMOCAT-modif/envs/GCATEnv.py", line 188, in reward
+    records = [(uu, action[i], self.rates[uu][action[i]]) for i, uu in enumerate(self.uids)]
+                               ~~~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: np.int64(69)
