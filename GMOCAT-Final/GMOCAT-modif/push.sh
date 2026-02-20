@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 0. Ambil perubahan terbaru dari remote
+# 0. Sinkronisasi: Ambil perubahan terbaru dari remote (rebase)
 git pull --rebase origin main
 
 # 1. Tambahkan semua perubahan (file baru, modifikasi, penghapusan)
