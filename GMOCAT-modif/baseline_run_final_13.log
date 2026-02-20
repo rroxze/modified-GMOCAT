@@ -1,8 +1,0 @@
-Traceback (most recent call last):
-  File "/app/GMOCAT-modif/./launch_gcat.py", line 9, in <module>
-    import envs as all_envs
-  File "/app/GMOCAT-modif/envs/__init__.py", line 1, in <module>
-    from .GCATEnv import GCATEnv
-  File "/app/GMOCAT-modif/envs/GCATEnv.py", line 13, in <module>
-    from sklearn.metrics import roc_auc_score
-ModuleNotFoundError: No module named 'sklearn'
